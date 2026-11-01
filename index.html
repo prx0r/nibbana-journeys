@@ -21,6 +21,11 @@
   .btn{font:inherit;background:#000;color:#fff;border:0;padding:.6rem 1.2rem;cursor:pointer}
   input{font:inherit;border:1px solid #000;padding:.4rem .5rem}
   .j{border-top:1px solid var(--line);padding:.75rem 0}
+  .blocks{display:flex;flex-wrap:wrap;gap:2px;margin-top:.35rem}
+  .b{width:1.35rem;height:1.35rem;border:1px solid #000;display:flex;
+     align-items:center;justify-content:center;font-size:.7rem}
+  .b.on{background:#000;color:#fff}
+  .b.next{border-style:dashed;color:#999}
   .j:first-of-type{border-top:0}
   .who{color:var(--mut);font-size:.9rem}
   .motto{text-align:center;font-style:italic;color:#555;margin:0 0 2rem}
@@ -86,6 +91,14 @@ function api(path, opts) {
   }).then((r) => (r.status === 401 ? null : r.json()));
 }
 
+
+function blocks(day) {
+  var out = [];
+  for (var i = 1; i <= day; i++) out.push('<span class="b on">' + i + '</span>');
+  out.push('<span class="b next">' + (day + 1) + '</span>');
+  return '<div class="blocks">' + out.join("") + '</div>';
+}
+
 let user = null;
 
 function renderSignedOut() {
@@ -101,6 +114,9 @@ function renderSignedIn() {
     '<h2>your journey</h2>' +
     (handle
       ? '<p><b>' + esc(handle) + '</b> &middot; day ' + day + '</p>' +
+        blocks(day) +
+        '<p style="margin-top:.8rem"><a href="https://nibbana.stonedoorway.com/journeys#t=' +
+        encodeURIComponent(token()) + '">open in the diary →</a></p>' +
         '<p class="mut">your entries appear here once writing is switched on. ' +
         'for now the account is open and you are listed below.</p>'
       : '<p>you are signed in as <span class="mut">' +
@@ -180,7 +196,8 @@ function loadList() {
         Math.max(1, Math.floor((Date.now() - Date.parse(j.started_at)) / 86400000) + 1);
       return '<div class="j"><b>' + esc(j.handle) + "</b> &middot; day " + day +
         '<div class="who">started ' + esc((j.started_at || "").slice(0, 10)) +
-        (j.intention ? " &middot; " + esc(j.intention) : "") + "</div></div>";
+        (j.intention ? " &middot; " + esc(j.intention) : "") + "</div>" +
+        blocks(day) + "</div>";
     }).join("");
   }).catch(() => {
     $("#list").innerHTML = '<p class="mut">could not load journeys.</p>';
