@@ -123,7 +123,8 @@ function loadList() {
       return;
     }
     $("#list").innerHTML = rows.map((j) => {
-      const day = Math.max(1, Math.floor((Date.now() - Date.parse(j.started_at)) / 86400000) + 1);
+      const day = j.current_day ||
+        Math.max(1, Math.floor((Date.now() - Date.parse(j.started_at)) / 86400000) + 1);
       return '<div class="j"><b>' + esc(j.handle) + "</b> · day " + day +
         '<div class="m">started ' + esc((j.started_at || "").slice(0, 10)) +
         (j.intention ? " · " + esc(j.intention) : "") + "</div></div>";
