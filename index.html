@@ -144,6 +144,7 @@ function tryRender() {
   google.accounts.id.initialize({
     client_id: cfg.clientId, callback: onCred,
     auto_select: false, itp_support: true, use_fedcm_for_prompt: true,
+    locale: "en",
   });
   host.innerHTML = "";
   google.accounts.id.renderButton(host, {
