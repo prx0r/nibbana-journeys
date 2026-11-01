@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>journeys</title>
+<style>
+  body{background:#fff;color:#000;font-family:monospace;margin:0;padding:1.5rem 1.2rem;
+       max-width:46rem;margin:0 auto;line-height:1.5}
+  a{color:#000}
+  h1{font-size:1.1rem;font-weight:normal;margin:0 0 1rem}
+  .m{color:#777;font-size:.85rem}
+  .j{border-top:1px solid #ddd;padding:.7rem 0}
+  input,select,button{font-family:monospace;font-size:1rem;border:1px solid #000;
+       background:#fff;color:#000;padding:.35rem .5rem}
+  button{background:#000;color:#fff;cursor:pointer}
+  #who{margin:0 0 1rem}
+</style>
+</head>
+<body>
+<p class="m"><a href="https://nibbana.stonedoorway.com/">← diary</a></p>
+<h1>journeys</h1>
+
+<div id="who"><span class="m">checking sign-in…</span></div>
+
+<hr style="border:0;border-top:1px solid #ccc;margin:1.5rem 0">
+<div id="list"><p class="m">loading…</p></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const API = "https://nibbana.stonedoorway.com";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function token() { try { return localStorage.getItem("nib_token") || ""; } catch (e) { return ""; } }
+function setToken(t) { try { t ? localStorage.setItem("nib_token", t) : localStorage.removeItem("nib_token"); } catch (e) {} }
+
+function api(path, opts) {
+  opts = opts || {};
+  const headers = Object.assign({}, opts.headers || {});
+  if (token()) headers.authorization = "Bearer " + token();
+  if (opts.body) headers["content-type"] = "application/json";
+  return fetch(API + path, {
+    method: opts.method || "GET",
+    headers,
+    credentials: "include",
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  }).then((r) => r.status === 401 ? null : r.json());
+}
+
+let user = null;
+
+function render() {
+  if (!user) {
+    $("#who").innerHTML =
+      '<div id="gsibtn"><span class="m">loading…</span></div>' +
+      '<p class="m">sign in to start or continue your journey. your diary at ' +
+      'nibbana.stonedoorway.com stays private and unchanged.</p>';
+    tryRender();
+    return;
+  }
+  $("#who").innerHTML =
+    "<p>signed in as <b>" + esc(user.handle || user.name || user.email || "—") + "</b>" +
+    (user.handle ? "" :
+      ' · choose a handle: <input id="handle" placeholder="3-20 chars" style="width:9rem">' +
+      ' <button id="savehandle">save</button>') +
+    ' &nbsp;·&nbsp; <a href="#" id="out">sign out</a></p>';
+  const out = $("#out");
+  if (out) out.onclick = (e) => { e.preventDefault(); setToken(""); user = null; render(); };
+  const sh = $("#savehandle");
+  if (sh) sh.onclick = () => {
+    api("/me/handle", { method: "POST", body: { handle: $("#handle").value } })
+      .then((d) => {
+        if (!d || d.error) { alert((d && (d.hint || d.error)) || "could not save"); return; }
+        loadSelf(); loadList();
+      });
+  };
+}
+
+function onCred(resp) {
+  api("/auth/google", { method: "POST", body: { credential: resp.credential } })
+    .then((d) => {
+      if (!d || d.error) { alert("sign in failed: " + ((d && (d.detail || d.error)) || "unknown")); return; }
+      setToken(d.token);
+      user = d.user;
+      render(); loadList();
+    })
+    .catch(() => alert("sign in failed"));
+}
+
+let cfg = null, tries = 0;
+function tryRender() {
+  const host = $("#gsibtn");
+  if (!host || !cfg || !cfg.clientId) return;
+  // gsi/client is async+defer and may land after /auth/config resolves
+  if (!window.google || !google.accounts || !google.accounts.id) {
+    if (++tries < 40) return setTimeout(tryRender, 250);
+    host.innerHTML = '<span class="m">could not load google sign-in</span>';
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: cfg.clientId, callback: onCred,
+    auto_select: false, itp_support: true, use_fedcm_for_prompt: true,
+  });
+  host.innerHTML = "";
+  google.accounts.id.renderButton(host, {
+    type: "standard", theme: "outline", size: "large",
+    shape: "pill", text: "signin_with", width: 240,
+  });
+}
+
+function loadSelf() {
+  if (!token()) { user = null; render(); return; }
+  api("/me").then((d) => { user = d && d.user ? d.user : null; render(); });
+}
+
+function loadList() {
+  api("/journeys.json").then((d) => {
+    const rows = (d && d.journeys) || [];
+    if (!rows.length) {
+      $("#list").innerHTML = '<p class="m">no public journeys yet — yours would be the first.</p>';
+      return;
+    }
+    $("#list").innerHTML = rows.map((j) => {
+      const day = Math.max(1, Math.floor((Date.now() - Date.parse(j.started_at)) / 86400000) + 1);
+      return '<div class="j"><b>' + esc(j.handle) + "</b> · day " + day +
+        '<div class="m">started ' + esc((j.started_at || "").slice(0, 10)) +
+        (j.intention ? " · " + esc(j.intention) : "") + "</div></div>";
+    }).join("");
+  }).catch(() => {
+    $("#list").innerHTML = '<p class="m">could not load journeys.</p>';
+  });
+}
+
+fetch(API + "/auth/config").then((r) => r.json())
+  .then((c) => { cfg = c; tryRender(); })
+  .catch(() => {});
+if (document.readyState !== "loading") setTimeout(tryRender, 0);
+else document.addEventListener("DOMContentLoaded", () => setTimeout(tryRender, 0));
+
+loadSelf();
+loadList();
+</script>
+</body>
+</html>
